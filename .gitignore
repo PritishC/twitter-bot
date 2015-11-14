@@ -64,3 +64,9 @@ local_settings.py
 # Swap Files
 *.swp
 .*.swp
+
+# Log Files
+*.log
+
+# Key Files
+*.pem
