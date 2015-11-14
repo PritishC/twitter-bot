@@ -17,6 +17,7 @@ with open('HISTORY.rst') as history_file:
 requirements = [
     'tweepy',
     'pymongo',
+    'google-api-python-client',
 ]
 
 test_requirements = [
