@@ -60,3 +60,7 @@ target/
 
 # Local Settings
 local_settings.py
+
+# Swap Files
+*.swp
+.*.swp
