@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import logging.handlers
 import json
 import urllib2
 import argparse
@@ -12,10 +13,24 @@ from pymongo import MongoClient
 import apis
 from decorators import retry
 
-logging.basicConfig(
-    filename='log.log', level=logging.INFO,
-    format='Path %(pathname)s, Line %(lineno)d - %(asctime)s - %(levelname)s - %(message)s'
-)
+if os.environ.get('SYSLOG', None):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    handler = logging.handlers.SysLogHandler(
+        facility=logging.handlers.SysLogHandler.LOG_DAEMON,
+        address="/dev/log"
+    )
+    formatter = logging.Formatter(
+        'Path %(pathname)s, Line %(lineno)d - %(asctime)s - %(levelname)s - %(message)s'
+    )
+    handler.formatter = formatter
+    logger.addHandler(handler)
+else:
+    logging.basicConfig(
+        filename='log.log', level=logging.INFO,
+        format='Path %(pathname)s, Line %(lineno)d - %(asctime)s - %(levelname)s - %(message)s'
+    )
+    logger = logging
 
 
 class TwitterBot(object):
@@ -49,7 +64,7 @@ class TwitterBot(object):
             self.subreddits[sub] = limit
         self.mongo_url = kwargs['mongo_url']
 
-    @retry((Exception,), tries=2, logger=logging)
+    @retry((Exception,), tries=2, logger=logger)
     def make_connections(self):
         """
         Make connections to various servers.
@@ -59,14 +74,14 @@ class TwitterBot(object):
         mongo_client = MongoClient(self.mongo_url)
         db = mongo_client.tweet_db
         tweets = db.tweets
-        logging.info('Got mongo client connection')
+        logger.info('Got mongo client connection')
 
         twitter = apis.get_twitter_client(self.twitter_config)
-        logging.info('Got Twitter client')
+        logger.info('Got Twitter client')
 
         return (tweets, twitter)
 
-    @retry((urllib2.HTTPError), tries=5, logger=logging)
+    @retry((urllib2.HTTPError), tries=5, logger=logger)
     def get_subreddit_data(self):
         """
         Gets data from reddit's JSON API and proceeds to
@@ -83,7 +98,7 @@ class TwitterBot(object):
 
         return res
 
-    @retry((Exception,), tries=3, logger=logging)
+    @retry((Exception,), tries=3, logger=logger)
     def shorten_url(self, long_url):
         """
         Try to shorten a long URL using Google API.
@@ -99,7 +114,7 @@ class TwitterBot(object):
 
         for key in data:
             jsondata = data[key]
-            logging.info("On subreddit url %s" % key)
+            logger.info("On subreddit url %s" % key)
 
             if 'data' in jsondata and 'children' in jsondata['data']:
                 posts = jsondata['data']['children']
@@ -112,7 +127,7 @@ class TwitterBot(object):
                     num_comments = entry['num_comments']
 
                     # Log permalink and URL
-                    logging.info('Permalink, URL: %s, %s' % (
+                    logger.info('Permalink, URL: %s, %s' % (
                         entry['permalink'], entry['url']
                     ))
 
@@ -137,23 +152,23 @@ class TwitterBot(object):
                         try:
                             twitter.update_status(status=status)
                         except Exception as e:
-                            logging.error(e)
+                            logger.error(e)
                             continue
 
-                        logging.info('Status created: %s' % status)
+                        logger.info('Status created: %s' % status)
 
                         tweets.insert_one({
                             'reddit_id': key + '/' + postid,
                         })
                     else:
-                        logging.info(
+                        logger.info(
                             "Post %s with score %d and comment count %d was"
                             " either already in DB or did not satisfy"
                             " criteria" %
                             (postid, score, num_comments)
                         )
             else:
-                logging.info("Skipping subredit url %s as no data" % key)
+                logger.info("Skipping subredit url %s as no data" % key)
 
 
 parser = argparse.ArgumentParser(description='Reddit2Twitter Bot')
